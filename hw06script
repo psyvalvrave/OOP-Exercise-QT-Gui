@@ -1,0 +1,257 @@
+Script started on 2019-05-05 18:02:17-04:00
+]0;psy@psy: ~/CMPSC-331_code/puzzle2[01;32mpsy@psy[00m:[01;34m~/CMPSC-331_code/puzzle2[00m$ cat puzzlemode[K.h
+cat: puzzlemod.h: No such file or directory
+]0;psy@psy: ~/CMPSC-331_code/puzzle2[01;32mpsy@psy[00m:[01;34m~/CMPSC-331_code/puzzle2[00m$ cat puzzlemodel.h
+#ifndef PUZZLEMODEL_H
+#define PUZZLEMODEL_H
+#include<QList>
+class PuzzleModel: public QObject{
+public:
+    PuzzleModel(QObject* parent=0);
+    int value(int r, int c);
+    bool slide(int tilenum);
+    bool neighboring(int r, int c);
+    bool orderCheck();
+    int m_Rows=4;
+    int m_Cols=4;
+    QList<int> m_Positions;
+    void ezWin();
+public slots:
+    void shuffle();
+signals:
+    void gridChanged();
+
+};
+#endif // PUZZLEMODEL_H
+]0;psy@psy: ~/CMPSC-331_code/puzzle2[01;32mpsy@psy[00m:[01;34m~/CMPSC-331_code/puzzle2[00m$ cat puzzlemodel.cpp
+#include<puzzlemodel.h>
+#include<stdlib.h>
+PuzzleModel::PuzzleModel(QObject *parent):QObject(parent){
+    for(int r=0;r<m_Rows*m_Cols;r++){
+            m_Positions.append(r);
+    }
+    shuffle();
+}
+
+int PuzzleModel::value(int r, int c){
+    return m_Positions[(m_Rows*(r-1)+c-1)];
+}
+bool PuzzleModel::neighboring(int r, int c){
+    if(r==1){
+        if(c==1){
+            return ((value(r+1,c)==0)||(value(r,c+1)==0));
+        }
+        if(c==4){
+            return ((value(r,c-1)==0)||(value(r+1,c)==0));
+        }
+        else{
+            return ((value(r,c-1)==0)||(value(r+1,c)==0))||(value(r,c+1)==0);
+        }
+    }
+    if(r==4){
+        if(c==1){
+            return ((value(r-1,c)==0)||(value(r,c+1)==0));
+        }
+        if(c==4){
+            return ((value(r,c-1)==0)||(value(r-1,c)==0));
+        }
+        else{
+            return ((value(r,c-1)==0)||(value(r-1,c)==0))||(value(r,c+1)==0);
+        }
+    }
+    else{
+        if(c==1){
+            return ((value(r-1,c)==0)||(value(r,c+1)==0))||(value(r+1,c)==0);
+        }
+        if(c==4){
+            return ((value(r-1,c)==0)||(value(r,c-1)==0))||(value(r+1,c)==0);
+        }
+        else{
+            return ((value(r-1,c)==0)||(value(r,c-1)==0))||(value(r+1,c)==0)||(value(r,c+1)==0);
+        }
+    }
+}
+
+bool PuzzleModel::slide(int tilenum){
+    int i = m_Positions.indexOf(tilenum);
+    int c = i+1-m_Rows*((i/m_Rows+1)-1);
+    if(neighboring(i/m_Rows+1,c)){
+        m_Positions.swap(m_Positions.indexOf(0),i);
+        return true;
+    }
+    return false;
+}
+
+void PuzzleModel::shuffle(){
+    srand(time(NULL));
+    for(int i=0;i<100;i++){
+        int r = rand()%this->m_Positions.size();
+        int s = rand()%this->m_Positions.size();
+        this->m_Positions.swap(r,s);
+    }
+
+}
+
+bool PuzzleModel::orderCheck(){
+    for(int a=0;a<m_Positions.size()-1;a++){
+        if(m_Positions[a]!=a+1){
+            return false;
+        } 
+    }
+    return true;
+}
+
+void PuzzleModel::ezWin(){
+    for(int i=0;i<m_Rows*m_Cols-1;i++){
+        m_Positions[i]=i+1;
+    }
+    m_Positions[m_Rows*m_Cols-1]=0;
+}
+]0;psy@psy: ~/CMPSC-331_code/puzzle2[01;32mpsy@psy[00m:[01;34m~/CMPSC-331_code/puzzle2[00m$ cat puzzleview,[K.h
+#ifndef PUZZLEVIEW_H
+#define PUZZLEVIEW_H
+#include<QtWidgets>
+#include<QtWidgets/QGridLayout>
+#include<QtWidgets/QButtonGroup>
+#include<puzzlemodel.h>
+#include<tile.h>
+class PuzzleView: public QWidget{
+    Q_OBJECT
+    PuzzleModel* m_Model;
+    QGridLayout* m_Layout;
+    QButtonGroup m_buttons;
+public:
+    PuzzleView(PuzzleModel * PuzzleModel, QWidget *parent = nullptr);
+    int const TOTAL_SIZE = m_Model->m_Cols*m_Model->m_Rows;
+    void basicSet();
+public slots:
+    void tryToSlide(QAbstractButton* button);
+    void refresh();
+    void ezW();
+};
+
+
+
+#endif // PUZZLEVIEW_H
+]0;psy@psy: ~/CMPSC-331_code/puzzle2[01;32mpsy@psy[00m:[01;34m~/CMPSC-331_code/puzzle2[00m$ car[Kt puzzleview.cpp
+#include<puzzleview.h>
+#include<QtWidgets/QMessageBox>
+
+PuzzleView::PuzzleView(PuzzleModel *model, QWidget *parent):QWidget(parent),m_Model(model){
+    m_Layout = new QGridLayout(this);
+    Tile* tile(0);
+    for(int i = 0;i<TOTAL_SIZE;i++){
+        tile = new Tile(i);
+        m_buttons.addButton(tile);
+    }
+    basicSet();
+    refresh();
+    connect(&m_buttons,SIGNAL(buttonClicked(QAbstractButton*)),this,SLOT(tryToSlide(QAbstractButton*)));
+
+}
+
+
+void PuzzleView::tryToSlide(QAbstractButton *button){
+    Tile* til = qobject_cast<Tile*>(button);
+    int number = til->getNumber();
+    m_Model->slide(number);
+    basicSet();
+    if(m_Model->orderCheck()){
+        QMessageBox mbox;
+        mbox.setText("You win!");
+        mbox.exec();
+    }
+}
+
+void PuzzleView::refresh(){
+    for(int i=0;i<100;i++){
+        int rand1 = rand()%TOTAL_SIZE;
+        int rand2 = rand()%TOTAL_SIZE;
+        this->m_Model->m_Positions.swap(rand1,rand2);
+    }
+    basicSet();
+
+}
+
+void PuzzleView::ezW(){
+    m_Model->ezWin();
+    basicSet();
+}
+
+void PuzzleView::basicSet(){
+    QList<QAbstractButton*> list = m_buttons.buttons();
+    for(int r=1;r<=m_Model->m_Rows;++r){
+        for(int c=1;c<=m_Model->m_Cols;++c){
+            int v = m_Model->value(r,c);
+            QAbstractButton *b = list.at(v);
+            if(v!=0){
+                b->setText(QString::number(v));
+            }
+            else{
+                b->setVisible(false);
+            }
+            m_Layout->addWidget(b,r,c);
+        }
+    }
+    QPushButton *shuffle = new QPushButton("Shuffle");
+    QPushButton *quit = new QPushButton("Quit");
+    m_Layout->addWidget(shuffle,m_Model->m_Rows-1,m_Model->m_Cols+1);
+    m_Layout->addWidget(quit,m_Model->m_Rows,m_Model->m_Cols+1);
+    connect(shuffle,SIGNAL(clicked()),this,SLOT(refresh()));
+    connect(quit,SIGNAL(clicked()),QApplication::instance(),SLOT(quit()));
+    QPushButton *ezWin = new QPushButton("ezWin");
+    m_Layout->addWidget(ezWin,m_Model->m_Rows-2,m_Model->m_Cols+1);
+    connect(ezWin,SIGNAL(clicked()),this,SLOT(ezW()));
+}
+]0;psy@psy: ~/CMPSC-331_code/puzzle2[01;32mpsy@psy[00m:[01;34m~/CMPSC-331_code/puzzle2[00m$ cat puzzlewindown[K.h
+#ifndef PUZZLEWINDOW_H
+#define PUZZLEWINDOW_H
+#include<QtWidgets/QMainWindow>
+#include<puzzlemodel.h>
+#include<puzzleview.h>
+class PuzzleWindow: public QMainWindow{
+public:
+    PuzzleWindow(QWidget *parent = 0);
+};
+#endif // PUZZLEWINDOW_H
+]0;psy@psy: ~/CMPSC-331_code/puzzle2[01;32mpsy@psy[00m:[01;34m~/CMPSC-331_code/puzzle2[00m$ car[Kt puzzlewindow.cpp
+#include<puzzlewindow.h>
+
+PuzzleWindow::PuzzleWindow(QWidget *parent):QMainWindow(parent){
+    PuzzleModel* model = new PuzzleModel();
+    PuzzleView *view  = new PuzzleView(model);
+    view->show();
+}
+]0;psy@psy: ~/CMPSC-331_code/puzzle2[01;32mpsy@psy[00m:[01;34m~/CMPSC-331_code/puzzle2[00m$ cat n[Kmain.cpp
+/*Zhecheng Li
+15-Puzzles Game(advanced): Exercise 9.6.3 on textbook(second try)
+This one is so difficuit!!!!!
+May 3, 2019
+*/
+#include<puzzlemodel.h>
+#include<puzzleview.h>
+#include<puzzlewindow.h>
+int main(int argc, char *argv[])
+{
+    QApplication app(argc, argv);
+    PuzzleWindow pw;
+    return app.exec();
+}
+]0;psy@psy: ~/CMPSC-331_code/puzzle2[01;32mpsy@psy[00m:[01;34m~/CMPSC-331_code/puzzle2[00m$ qmake
+Info: creating stash file /home/psy/CMPSC-331_code/puzzle2/.qmake.stash
+]0;psy@psy: ~/CMPSC-331_code/puzzle2[01;32mpsy@psy[00m:[01;34m~/CMPSC-331_code/puzzle2[00m$ make
+g++ -c -pipe -O2 -Wall -W -D_REENTRANT -fPIC -DQT_NO_DEBUG -DQT_WIDGETS_LIB -DQT_GUI_LIB -DQT_CORE_LIB -I. -isystem /usr/include/x86_64-linux-gnu/qt5 -isystem /usr/include/x86_64-linux-gnu/qt5/QtWidgets -isystem /usr/include/x86_64-linux-gnu/qt5/QtGui -isystem /usr/include/x86_64-linux-gnu/qt5/QtCore -I. -isystem /usr/include/libdrm -I/usr/lib/x86_64-linux-gnu/qt5/mkspecs/linux-g++ -o puzzlemodel.o puzzlemodel.cpp
+g++ -c -pipe -O2 -Wall -W -D_REENTRANT -fPIC -DQT_NO_DEBUG -DQT_WIDGETS_LIB -DQT_GUI_LIB -DQT_CORE_LIB -I. -isystem /usr/include/x86_64-linux-gnu/qt5 -isystem /usr/include/x86_64-linux-gnu/qt5/QtWidgets -isystem /usr/include/x86_64-linux-gnu/qt5/QtGui -isystem /usr/include/x86_64-linux-gnu/qt5/QtCore -I. -isystem /usr/include/libdrm -I/usr/lib/x86_64-linux-gnu/qt5/mkspecs/linux-g++ -o puzzleview.o puzzleview.cpp
+g++ -c -pipe -O2 -Wall -W -D_REENTRANT -fPIC -DQT_NO_DEBUG -DQT_WIDGETS_LIB -DQT_GUI_LIB -DQT_CORE_LIB -I. -isystem /usr/include/x86_64-linux-gnu/qt5 -isystem /usr/include/x86_64-linux-gnu/qt5/QtWidgets -isystem /usr/include/x86_64-linux-gnu/qt5/QtGui -isystem /usr/include/x86_64-linux-gnu/qt5/QtCore -I. -isystem /usr/include/libdrm -I/usr/lib/x86_64-linux-gnu/qt5/mkspecs/linux-g++ -o tile.o tile.cpp
+g++ -c -pipe -O2 -Wall -W -D_REENTRANT -fPIC -DQT_NO_DEBUG -DQT_WIDGETS_LIB -DQT_GUI_LIB -DQT_CORE_LIB -I. -isystem /usr/include/x86_64-linux-gnu/qt5 -isystem /usr/include/x86_64-linux-gnu/qt5/QtWidgets -isystem /usr/include/x86_64-linux-gnu/qt5/QtGui -isystem /usr/include/x86_64-linux-gnu/qt5/QtCore -I. -isystem /usr/include/libdrm -I/usr/lib/x86_64-linux-gnu/qt5/mkspecs/linux-g++ -o puzzlewindow.o puzzlewindow.cpp
+g++ -c -pipe -O2 -Wall -W -D_REENTRANT -fPIC -DQT_NO_DEBUG -DQT_WIDGETS_LIB -DQT_GUI_LIB -DQT_CORE_LIB -I. -isystem /usr/include/x86_64-linux-gnu/qt5 -isystem /usr/include/x86_64-linux-gnu/qt5/QtWidgets -isystem /usr/include/x86_64-linux-gnu/qt5/QtGui -isystem /usr/include/x86_64-linux-gnu/qt5/QtCore -I. -isystem /usr/include/libdrm -I/usr/lib/x86_64-linux-gnu/qt5/mkspecs/linux-g++ -o main.o main.cpp
+g++ -pipe -O2 -Wall -W -dM -E -o moc_predefs.h /usr/lib/x86_64-linux-gnu/qt5/mkspecs/features/data/dummy.cpp
+/usr/lib/qt5/bin/moc -DQT_NO_DEBUG -DQT_WIDGETS_LIB -DQT_GUI_LIB -DQT_CORE_LIB --include ./moc_predefs.h -I/usr/lib/x86_64-linux-gnu/qt5/mkspecs/linux-g++ -I/home/psy/CMPSC-331_code/puzzle2 -I/usr/include/x86_64-linux-gnu/qt5 -I/usr/include/x86_64-linux-gnu/qt5/QtWidgets -I/usr/include/x86_64-linux-gnu/qt5/QtGui -I/usr/include/x86_64-linux-gnu/qt5/QtCore -I/usr/include/c++/8 -I/usr/include/x86_64-linux-gnu/c++/8 -I/usr/include/c++/8/backward -I/usr/lib/gcc/x86_64-linux-gnu/8/include -I/usr/local/include -I/usr/lib/gcc/x86_64-linux-gnu/8/include-fixed -I/usr/include/x86_64-linux-gnu -I/usr/include puzzleview.h -o moc_puzzleview.cpp
+g++ -c -pipe -O2 -Wall -W -D_REENTRANT -fPIC -DQT_NO_DEBUG -DQT_WIDGETS_LIB -DQT_GUI_LIB -DQT_CORE_LIB -I. -isystem /usr/include/x86_64-linux-gnu/qt5 -isystem /usr/include/x86_64-linux-gnu/qt5/QtWidgets -isystem /usr/include/x86_64-linux-gnu/qt5/QtGui -isystem /usr/include/x86_64-linux-gnu/qt5/QtCore -I. -isystem /usr/include/libdrm -I/usr/lib/x86_64-linux-gnu/qt5/mkspecs/linux-g++ -o moc_puzzleview.o moc_puzzleview.cpp
+/usr/lib/qt5/bin/moc -DQT_NO_DEBUG -DQT_WIDGETS_LIB -DQT_GUI_LIB -DQT_CORE_LIB --include ./moc_predefs.h -I/usr/lib/x86_64-linux-gnu/qt5/mkspecs/linux-g++ -I/home/psy/CMPSC-331_code/puzzle2 -I/usr/include/x86_64-linux-gnu/qt5 -I/usr/include/x86_64-linux-gnu/qt5/QtWidgets -I/usr/include/x86_64-linux-gnu/qt5/QtGui -I/usr/include/x86_64-linux-gnu/qt5/QtCore -I/usr/include/c++/8 -I/usr/include/x86_64-linux-gnu/c++/8 -I/usr/include/c++/8/backward -I/usr/lib/gcc/x86_64-linux-gnu/8/include -I/usr/local/include -I/usr/lib/gcc/x86_64-linux-gnu/8/include-fixed -I/usr/include/x86_64-linux-gnu -I/usr/include tile.h -o moc_tile.cpp
+g++ -c -pipe -O2 -Wall -W -D_REENTRANT -fPIC -DQT_NO_DEBUG -DQT_WIDGETS_LIB -DQT_GUI_LIB -DQT_CORE_LIB -I. -isystem /usr/include/x86_64-linux-gnu/qt5 -isystem /usr/include/x86_64-linux-gnu/qt5/QtWidgets -isystem /usr/include/x86_64-linux-gnu/qt5/QtGui -isystem /usr/include/x86_64-linux-gnu/qt5/QtCore -I. -isystem /usr/include/libdrm -I/usr/lib/x86_64-linux-gnu/qt5/mkspecs/linux-g++ -o moc_tile.o moc_tile.cpp
+g++ -Wl,-O1 -o puzzle2 puzzlemodel.o puzzleview.o tile.o puzzlewindow.o main.o moc_puzzleview.o moc_tile.o   -lQt5Widgets -lQt5Gui -lQt5Core -lGL -lpthread 
+]0;psy@psy: ~/CMPSC-331_code/puzzle2[01;32mpsy@psy[00m:[01;34m~/CMPSC-331_code/puzzle2[00m$ make[K[K[K[Kexit
+exit
+
+Script done on 2019-05-05 18:04:01-04:00
